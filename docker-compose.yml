@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: medicine-cal-db
+    restart: always
+    environment:
+      POSTGRES_DB: medicine_cal
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - medicine-cal-network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: medicine-cal-app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/medicine_cal?schema=public
+      NEXTAUTH_SECRET: UQ3lOFK9x1brurCmJblOIIvk9SG0vC2ercModRmbqwc=
+      NEXTAUTH_URL: http://localhost:3000
+    depends_on:
+      - postgres
+    networks:
+      - medicine-cal-network
+
+volumes:
+  postgres_data:
+
+networks:
+  medicine-cal-network:
+    driver: bridge

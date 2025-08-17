@@ -1,0 +1,71 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  password      String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  medicines     Medicine[]
+  intakes       Intake[]
+}
+
+model Medicine {
+  id            String    @id @default(cuid())
+  name          String
+  startDate     DateTime
+  endDate       DateTime
+  times         MedicineTime[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  intakes       Intake[]
+  
+  @@index([userId])
+}
+
+model MedicineTime {
+  id            String    @id @default(cuid())
+  hour          Int       // 0-23
+  minute        Int       // 0-59
+  
+  medicineId    String
+  medicine      Medicine  @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  
+  @@index([medicineId])
+}
+
+model Intake {
+  id            String    @id @default(cuid())
+  date          DateTime  @db.Date
+  time          String    // Format: "HH:mm"
+  taken         Boolean   @default(false)
+  takenAt       DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  medicineId    String
+  medicine      Medicine  @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([medicineId, date, time])
+  @@index([userId, date])
+  @@index([medicineId])
+}
