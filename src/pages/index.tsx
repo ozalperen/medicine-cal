@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import { format, startOfWeek, addDays, isSameDay } from 'date-fns'
+import { format, startOfWeek, addDays, isSameDay, startOfDay } from 'date-fns'
 import Layout from '@/components/Layout'
 import { FiCheck, FiX } from 'react-icons/fi'
 import toast from 'react-hot-toast'
@@ -23,12 +23,32 @@ export default function HomePage() {
   const [weekDates, setWeekDates] = useState<Date[]>([])
   const [intakes, setIntakes] = useState<IntakeWithMedicine[]>([])
   const [loading, setLoading] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
-    const start = startOfWeek(selectedDate, { weekStartsOn: 1 })
-    const dates = Array.from({ length: 7 }, (_, i) => addDays(start, i))
-    setWeekDates(dates)
-  }, [selectedDate])
+    // Check if mobile on mount and window resize
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768) // 768px is typical tablet breakpoint
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
+
+  useEffect(() => {
+    if (isMobile) {
+      // For mobile: show 3 days centered on selected date
+      const dates = Array.from({ length: 3 }, (_, i) => addDays(selectedDate, i - 1))
+      setWeekDates(dates)
+    } else {
+      // For desktop: show full week
+      const start = startOfWeek(selectedDate, { weekStartsOn: 1 })
+      const dates = Array.from({ length: 7 }, (_, i) => addDays(start, i))
+      setWeekDates(dates)
+    }
+  }, [selectedDate, isMobile])
 
   useEffect(() => {
     if (session?.user && weekDates.length > 0) {
@@ -42,7 +62,7 @@ export default function HomePage() {
     setLoading(true)
     try {
       const startDate = format(weekDates[0], 'yyyy-MM-dd')
-      const endDate = format(weekDates[6], 'yyyy-MM-dd')
+      const endDate = format(weekDates[weekDates.length - 1], 'yyyy-MM-dd')
       
       const response = await fetch(`/api/intakes?startDate=${startDate}&endDate=${endDate}`)
       if (response.ok) {
@@ -84,28 +104,35 @@ export default function HomePage() {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="bg-white shadow rounded-lg p-6">
-          <h1 className="text-2xl font-bold text-gray-900 mb-6">Medicine Calendar</h1>
+        <div className="bg-white shadow rounded-lg p-3 sm:p-6">
+          <div className="flex justify-between items-center mb-4 sm:mb-6">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Medicine Calendar</h1>
+            {session?.user?.name && (
+              <div className="text-sm sm:text-base text-gray-600">
+                Patient: <span className="font-medium">{session.user.name}</span>
+              </div>
+            )}
+          </div>
           
           <div className="mb-6 flex justify-between items-center">
             <button
-              onClick={() => setSelectedDate(addDays(selectedDate, -7))}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              onClick={() => setSelectedDate(addDays(selectedDate, isMobile ? -3 : -7))}
+              className="px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
             >
-              Previous Week
+              {isMobile ? 'Previous 3 Days' : 'Previous Week'}
             </button>
-            <span className="text-lg font-medium">
-              {format(weekDates[0] || selectedDate, 'MMM d')} - {format(weekDates[6] || selectedDate, 'MMM d, yyyy')}
+            <span className="text-sm sm:text-lg font-medium text-center">
+              {format(weekDates[0] || selectedDate, 'MMM d')} - {format(weekDates[weekDates.length - 1] || selectedDate, 'MMM d, yyyy')}
             </span>
             <button
-              onClick={() => setSelectedDate(addDays(selectedDate, 7))}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              onClick={() => setSelectedDate(addDays(selectedDate, isMobile ? 3 : 7))}
+              className="px-2 sm:px-4 py-2 text-xs sm:text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
             >
-              Next Week
+              {isMobile ? 'Next 3 Days' : 'Next Week'}
             </button>
           </div>
 
-          <div className="grid grid-cols-7 gap-4 relative">
+          <div className={`grid ${isMobile ? 'grid-cols-3' : 'grid-cols-7'} gap-2 sm:gap-4 relative`}>
             {loading && (
               <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
                 <div className="text-gray-500">Loading...</div>
@@ -118,31 +145,31 @@ export default function HomePage() {
               return (
                 <div
                   key={index}
-                  className={`border rounded-lg p-4 min-h-[200px] ${
+                  className={`border rounded-lg p-2 sm:p-4 min-h-[150px] sm:min-h-[200px] ${
                     isToday ? 'border-primary-500 bg-primary-50' : 'border-gray-200'
                   }`}
                 >
                   <div className="text-center mb-2">
-                    <div className="text-sm text-gray-500">{format(date, 'EEE')}</div>
-                    <div className={`text-lg font-semibold ${isToday ? 'text-primary-700' : 'text-gray-900'}`}>
+                    <div className="text-xs sm:text-sm text-gray-500">{format(date, 'EEE')}</div>
+                    <div className={`text-sm sm:text-lg font-semibold ${isToday ? 'text-primary-700' : 'text-gray-900'}`}>
                       {format(date, 'd')}
                     </div>
                   </div>
                   
-                  <div className="space-y-2">
+                  <div className="space-y-1 sm:space-y-2">
                     {dayIntakes.map((intake) => (
                       <div
                         key={intake.id}
-                        className={`p-2 rounded text-xs ${
+                        className={`p-1 sm:p-2 rounded text-xs ${
                           intake.taken ? 'bg-green-100' : 'bg-yellow-100'
                         }`}
                       >
-                        <div className="font-medium">{intake.medicine.name}</div>
+                        <div className="font-medium text-xs truncate">{intake.medicine.name}</div>
                         <div className="flex justify-between items-center mt-1">
-                          <span>{intake.time}</span>
+                          <span className="text-xs">{intake.time}</span>
                           <button
                             onClick={() => toggleIntake(intake.id, !intake.taken)}
-                            className="text-lg"
+                            className="text-sm sm:text-lg"
                           >
                             {intake.taken ? (
                               <FiCheck className="text-green-600" />

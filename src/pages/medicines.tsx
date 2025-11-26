@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import Layout from '@/components/Layout'
-import { FiPlus, FiTrash2, FiClock } from 'react-icons/fi'
+import { FiPlus, FiTrash2, FiClock, FiEdit2 } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 
@@ -23,7 +23,8 @@ export default function MedicinesPage() {
   const { data: session } = useSession()
   const [medicines, setMedicines] = useState<Medicine[]>([])
   const [loading, setLoading] = useState(true)
-  const [showAddModal, setShowAddModal] = useState(false)
+  const [showModal, setShowModal] = useState(false)
+  const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     startDate: format(new Date(), 'yyyy-MM-dd'),
@@ -51,28 +52,59 @@ export default function MedicinesPage() {
     }
   }
 
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      startDate: format(new Date(), 'yyyy-MM-dd'),
+      endDate: format(new Date(), 'yyyy-MM-dd'),
+      times: [{ hour: 9, minute: 0 }]
+    })
+    setEditingMedicine(null)
+  }
+
+  const openAddModal = () => {
+    resetForm()
+    setShowModal(true)
+  }
+
+  const openEditModal = (medicine: Medicine) => {
+    setEditingMedicine(medicine)
+    setFormData({
+      name: medicine.name,
+      startDate: format(new Date(medicine.startDate), 'yyyy-MM-dd'),
+      endDate: format(new Date(medicine.endDate), 'yyyy-MM-dd'),
+      times: medicine.times.map(t => ({ hour: t.hour, minute: t.minute }))
+    })
+    setShowModal(true)
+  }
+
+  const closeModal = () => {
+    setShowModal(false)
+    resetForm()
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
+    const isEditing = !!editingMedicine
+
     try {
-      const response = await fetch('/api/medicines', {
-        method: 'POST',
+      const url = isEditing 
+        ? `/api/medicines/${editingMedicine.id}` 
+        : '/api/medicines'
+      
+      const response = await fetch(url, {
+        method: isEditing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       })
 
       if (response.ok) {
-        toast.success('Medicine added successfully!')
-        setShowAddModal(false)
-        setFormData({
-          name: '',
-          startDate: format(new Date(), 'yyyy-MM-dd'),
-          endDate: format(new Date(), 'yyyy-MM-dd'),
-          times: [{ hour: 9, minute: 0 }]
-        })
+        toast.success(isEditing ? 'Medicine updated successfully!' : 'Medicine added successfully!')
+        closeModal()
         fetchMedicines()
       } else {
-        toast.error('Failed to add medicine')
+        toast.error(isEditing ? 'Failed to update medicine' : 'Failed to add medicine')
       }
     } catch (error) {
       toast.error('Something went wrong')
@@ -125,7 +157,7 @@ export default function MedicinesPage() {
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-bold text-gray-900">My Medicines</h1>
             <button
-              onClick={() => setShowAddModal(true)}
+              onClick={openAddModal}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
             >
               <FiPlus className="mr-2" />
@@ -161,12 +193,22 @@ export default function MedicinesPage() {
                         ))}
                       </div>
                     </div>
-                    <button
-                      onClick={() => deleteMedicine(medicine.id)}
-                      className="text-red-600 hover:text-red-700"
-                    >
-                      <FiTrash2 />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openEditModal(medicine)}
+                        className="text-gray-600 hover:text-primary-600"
+                        title="Edit medicine"
+                      >
+                        <FiEdit2 />
+                      </button>
+                      <button
+                        onClick={() => deleteMedicine(medicine.id)}
+                        className="text-red-600 hover:text-red-700"
+                        title="Delete medicine"
+                      >
+                        <FiTrash2 />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -175,11 +217,13 @@ export default function MedicinesPage() {
         </div>
       </div>
 
-      {/* Add Medicine Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
+      {/* Add/Edit Medicine Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg max-w-md w-full p-6">
-            <h2 className="text-lg font-medium text-gray-900 mb-4">Add Medicine</h2>
+            <h2 className="text-lg font-medium text-gray-900 mb-4">
+              {editingMedicine ? 'Edit Medicine' : 'Add Medicine'}
+            </h2>
             <form onSubmit={handleSubmit}>
               <div className="space-y-4">
                 <div>
@@ -276,7 +320,7 @@ export default function MedicinesPage() {
               <div className="mt-6 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={closeModal}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
                 >
                   Cancel
@@ -285,7 +329,7 @@ export default function MedicinesPage() {
                   type="submit"
                   className="px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                 >
-                  Add Medicine
+                  {editingMedicine ? 'Update Medicine' : 'Add Medicine'}
                 </button>
               </div>
             </form>
